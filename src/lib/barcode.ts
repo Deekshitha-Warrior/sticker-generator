@@ -1,5 +1,4 @@
 import JsBarcode from 'jsbarcode'
-import { supabase } from './supabase'
 
 /** Normalize any scanned or user-entered barcode to a consistent UPPERCASE trimmed string. */
 export const normalizeBarcode = (code: string | null | undefined): string => {
@@ -178,26 +177,21 @@ export function getAllLabelSizes(): LabelSizeConfig[] {
 }
 
 /**
- * Fetch all label sizes from Supabase database with local storage fallback
+ * Fetch all label sizes from database with local storage fallback
  */
 export async function fetchLabelSizesFromDb(): Promise<LabelSizeConfig[]> {
   try {
-    const { data, error } = await supabase
-      .from('barcode_label_sizes')
-      .select('*')
-      .order('created_at', { ascending: true })
+    const res = await fetch('/api/label-sizes')
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`)
+    const json = await res.json()
+    const data = json.data || []
 
-    if (error) {
-      console.error('[fetchLabelSizesFromDb] Error:', error)
-      return getAllLabelSizes()
-    }
-
-    const mapped = (data || []).map((row) => mapDbToLabelConfig(row as DbLabelSize))
+    const mapped = (data || []).map((row: DbLabelSize) => mapDbToLabelConfig(row))
     try {
       localStorage.setItem(CUSTOM_SIZES_KEY, JSON.stringify(mapped))
       localStorage.setItem(SIZES_WIPED_VERSION_KEY, 'true')
     } catch (_) {}
-    return mapped
+    return mapped.length > 0 ? mapped : getAllLabelSizes()
   } catch (err) {
     console.error('[fetchLabelSizesFromDb] Exception:', err)
     return getAllLabelSizes()
@@ -205,50 +199,46 @@ export async function fetchLabelSizesFromDb(): Promise<LabelSizeConfig[]> {
 }
 
 /**
- * Create a new label size in Supabase database
+ * Create a new label size in database
  */
 export async function createLabelSizeInDb(
   size: Omit<LabelSizeConfig, 'id'>
 ): Promise<LabelSizeConfig> {
   const trimmedName = size.name.trim()
-  const { data, error } = await supabase
-    .from('barcode_label_sizes')
-    .insert({
+  const res = await fetch('/api/label-sizes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       name: trimmedName,
       width_mm: size.widthMm,
       height_mm: size.heightMm,
       labels_per_row: size.labelsPerRow,
       horizontal_gap_mm: size.horizontalGapMm,
-    })
-    .select()
-    .single()
+    }),
+  })
 
-  if (error) {
-    console.error('[createLabelSizeInDb] Error:', error)
-    throw error
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}))
+    throw new Error(errJson.error || 'Failed to create label size')
   }
 
-  const newConfig = mapDbToLabelConfig(data as DbLabelSize)
+  const json = await res.json()
+  const newConfig = mapDbToLabelConfig(json.data as DbLabelSize)
   saveStoredCustomSize(newConfig)
   return newConfig
 }
 
 /**
- * Delete a label size from Supabase database
+ * Delete a label size from database
  */
 export async function deleteLabelSizeFromDb(id: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('barcode_label_sizes')
-      .delete()
-      .eq('id', id)
+    const res = await fetch(`/api/label-sizes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
 
     deleteStoredCustomSize(id)
-    if (error) {
-      console.error('[deleteLabelSizeFromDb] Error:', error)
-      return false
-    }
-    return true
+    return res.ok
   } catch (err) {
     console.error('[deleteLabelSizeFromDb] Exception:', err)
     deleteStoredCustomSize(id)
@@ -257,20 +247,11 @@ export async function deleteLabelSizeFromDb(id: string): Promise<boolean> {
 }
 
 /**
- * Delete all custom label sizes from Supabase database
+ * Delete all custom label sizes from database
  */
 export async function clearAllLabelSizesInDb(): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('barcode_label_sizes')
-      .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000')
-
     clearAllCustomSizes()
-    if (error) {
-      console.error('[clearAllLabelSizesInDb] Error:', error)
-      return false
-    }
     return true
   } catch (err) {
     console.error('[clearAllLabelSizesInDb] Exception:', err)

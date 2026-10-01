@@ -1,5 +1,5 @@
 -- ====================================================================
--- Migration 0023: Custom Barcode Label Sizes Table
+-- Migration 0003: Barcode Label Sizes & Printer Specifications
 -- Stores custom and physical label roll dimensions synchronized via Supabase
 -- ====================================================================
 
@@ -68,3 +68,13 @@ CREATE TRIGGER trg_barcode_label_sizes_updated_at
   BEFORE UPDATE ON public.barcode_label_sizes
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
+
+-- Seed Default Standard Thermal Label Presets
+INSERT INTO public.barcode_label_sizes (name, width_mm, height_mm, labels_per_row, horizontal_gap_mm, is_default)
+VALUES 
+  ('Standard (50 × 25 mm)', 50, 25, 1, 0, true),
+  ('2-Up Roll (50 × 25 mm × 2)', 50, 25, 2, 2, false),
+  ('Compact (38 × 25 mm)', 38, 25, 1, 0, false),
+  ('Jewelry / Small Tag (35 × 22 mm)', 35, 22, 1, 0, false),
+  ('Large Box Sticker (100 × 50 mm)', 100, 50, 1, 0, false)
+ON CONFLICT (name) DO NOTHING;

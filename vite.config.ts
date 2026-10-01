@@ -2,9 +2,32 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+function neonApiPlugin() {
+  return {
+    name: 'neon-api-middleware',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        if (req.url && req.url.startsWith('/api/')) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { handleApiRequest } = require('./api/neonHandler.cjs')
+            await handleApiRequest(req, res)
+          } catch (e: any) {
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: e.message }))
+          }
+          return
+        }
+        next()
+      })
+    },
+  }
+}
+
 export default defineConfig({
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   plugins: [
+    neonApiPlugin(),
     react(),
     VitePWA({
       selfDestroying: true,
@@ -21,9 +44,9 @@ export default defineConfig({
         'robots.txt',
       ],
       manifest: {
-        name: 'Madhura Tex POS',
-        short_name: 'Madhura Tex',
-        description: 'Madhura Tex Premium Wholesale Store retail billing, barcode inventory, order, receipt, and invoice administration.',
+        name: 'Madhura Tex Barcode Studio',
+        short_name: 'Barcode Studio',
+        description: 'Madhura Tex Standalone Barcode Generator and Label Printing Studio',
         theme_color: '#0B2559',
         background_color: '#0B2559',
         display: 'standalone',
@@ -65,39 +88,7 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpeg,jpg,woff,woff2}'],
-        navigateFallbackDenylist: [/^\/api/, /^\/admin/, /supabase/, /^\/assets\//, /\.[a-zA-Z0-9]+$/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkOnly',
-          },
-          {
-            urlPattern: /\/api\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 3,
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'google-fonts-stylesheets',
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-            },
-          },
-        ],
+        navigateFallbackDenylist: [/^\/api/, /^\/assets\//, /\.[a-zA-Z0-9]+$/],
       },
     }),
   ],
@@ -107,10 +98,6 @@ export default defineConfig({
       output: {
         manualChunks: (id: string) => {
           if (!id.includes('node_modules')) return
-          if (id.includes('@supabase')) return 'supabase'
-          if (id.includes('framer-motion')) return 'motion'
-          if (id.includes('recharts') || id.includes('d3-') || id.includes('react-smooth') || id.includes('victory-')) return 'charts'
-          if (id.includes('react-router')) return 'router'
           if (id.includes('lucide-react')) return 'icons'
           if (id.includes('jsbarcode') || id.includes('@zxing')) return 'barcode'
           if (id.includes('workbox') || id.includes('vite-plugin-pwa')) return 'pwa'
@@ -119,19 +106,7 @@ export default defineConfig({
       },
     },
   },
-  optimizeDeps: {
-    esbuildOptions: {
-      target: 'esnext',
-    },
-  },
   server: {
     allowedHosts: true,
-    headers: {
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
-      'Content-Security-Policy': "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob: data:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https: wss: blob: data:; media-src 'self' data: blob: https:; object-src 'none'; base-uri 'self';",
-    },
   },
 })
