@@ -31,8 +31,15 @@ async function handleApiRequest(req, res) {
     return;
   }
 
-  const url = new URL(req.url, 'http://localhost');
-  const pathname = url.pathname;
+  const rawUrl = req.headers['x-forwarded-uri'] || req.url || '/';
+  const url = new URL(rawUrl, 'http://localhost');
+  let pathname = url.pathname;
+
+  // In Vercel [...path].js functions, req.query.path contains the sub-paths
+  if (req.query && req.query.path) {
+    const sub = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
+    pathname = '/api/' + sub.replace(/^\/+/, '');
+  }
 
   try {
     const db = getPool();
